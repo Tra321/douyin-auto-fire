@@ -13,6 +13,7 @@ class PageOperationError(RuntimeError):
 
 
 RETRY_DELAY_MS = 3_000
+SEARCH_TYPING_DELAY_MS = 50
 
 
 class DouyinChat:
@@ -44,7 +45,9 @@ class DouyinChat:
         search = await first_visible(self.page, SEARCH_INPUTS, self.timeout_ms)
         await search.click()
         await search.fill("")
-        await search.fill(name)
+        # Douyin's search UI currently ignores text inserted with Locator.fill().
+        # Keyboard events are required to trigger the site's search handler.
+        await self.page.keyboard.type(name, delay=SEARCH_TYPING_DELAY_MS)
         await self.page.wait_for_timeout(1_500)
 
         result = await self._search_result(name)

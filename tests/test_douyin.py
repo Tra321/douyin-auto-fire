@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.douyin import DouyinChat, PageOperationError
+from app.douyin import DouyinChat, PageOperationError, SEARCH_TYPING_DELAY_MS
 from app.selectors import CHAT_PANEL_MARKERS, MESSAGE_INPUTS
 
 
@@ -10,6 +10,7 @@ from app.selectors import CHAT_PANEL_MARKERS, MESSAGE_INPUTS
 async def test_search_failure_raises_without_page_text_or_real_name(monkeypatch) -> None:
     page = MagicMock()
     page.wait_for_timeout = AsyncMock()
+    page.keyboard.type = AsyncMock()
     search = MagicMock()
     search.click = AsyncMock()
     search.fill = AsyncMock()
@@ -23,6 +24,8 @@ async def test_search_failure_raises_without_page_text_or_real_name(monkeypatch)
     message = str(exc_info.value)
     assert "当前页面文字" not in message
     assert "张三" not in message
+    search.fill.assert_awaited_once_with("")
+    page.keyboard.type.assert_awaited_once_with("张三", delay=SEARCH_TYPING_DELAY_MS)
 
 
 def _locator_group(items: list[MagicMock]) -> MagicMock:
