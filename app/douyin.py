@@ -42,6 +42,15 @@ class DouyinChat:
         raise PageOperationError("打开聊天失败")
 
     async def _open_target_once(self, name: str) -> None:
+        # Prefer an already visible recent conversation. Douyin's search panel
+        # may not return a friend when the configured name is a local remark,
+        # even though that same remark is shown in the conversation list.
+        result = await self._visible_conversation_result(name)
+        if result is not None:
+            await result.click(force=True)
+            await self._confirm_opened(name)
+            return
+
         search = await first_visible(self.page, SEARCH_INPUTS, self.timeout_ms)
         await search.click()
         await search.fill("")
@@ -109,6 +118,29 @@ class DouyinChat:
 
         # The nickname node can be hidden while its conversation row is visible.
         # Locate and click the complete row instead of relying on text visibility.
+        result = await self._visible_conversation_result(name)
+        if result is not None:
+            return result
+
+        # Some Douyin builds render the title itself as hidden, but keep a visible
+        # ancestor as the actionable result. Find that ancestor from the hidden title.
+        # This hidden-title fallback stays STRICT exact only: a hidden stale name
+        # node (group or plain) must never be trusted to resolve the recipient.
+        hidden_titles = self.page.locator('[class*="conversationConversationItemtitle"]')
+        for index in range(await hidden_titles.count()):
+            title = hidden_titles.nth(index)
+            if not await _text_equals(title, name):
+                continue
+            row = title.locator(
+                "xpath=ancestor::*[contains(@class, 'conversationConversationItem')][1]"
+            )
+            if await row.count() and await row.is_visible():
+                return row
+
+        return None
+
+    async def _visible_conversation_result(self, name: str) -> Locator | None:
+        """Return a visible recent-conversation row matching name exactly."""
         row_selectors = (
             '[data-e2e="conversation-item"]',
             '[class*="conversationConversationItem"]',
@@ -148,21 +180,6 @@ class DouyinChat:
                         return row
                 except Exception:
                     continue
-
-        # Some Douyin builds render the title itself as hidden, but keep a visible
-        # ancestor as the actionable result. Find that ancestor from the hidden title.
-        # This hidden-title fallback stays STRICT exact only: a hidden stale name
-        # node (group or plain) must never be trusted to resolve the recipient.
-        hidden_titles = self.page.locator('[class*="conversationConversationItemtitle"]')
-        for index in range(await hidden_titles.count()):
-            title = hidden_titles.nth(index)
-            if not await _text_equals(title, name):
-                continue
-            row = title.locator(
-                "xpath=ancestor::*[contains(@class, 'conversationConversationItem')][1]"
-            )
-            if await row.count() and await row.is_visible():
-                return row
 
         return None
 

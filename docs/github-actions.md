@@ -283,7 +283,7 @@ on:
       dry_run:
         description: Only verify login and friends without sending
         type: boolean
-        default: false
+        default: true
 ```
 
 本项目已经默认支持，一般不需要修改。
