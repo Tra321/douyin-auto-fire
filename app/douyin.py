@@ -52,6 +52,11 @@ class DouyinChat:
 
         result = await self._search_result(name)
         if result is None:
+            new_chat = self.page.locator(".LeftPanelHeaderheader > :last-child")
+            if await new_chat.count() and await new_chat.is_visible():
+                await new_chat.click()
+                await self.page.wait_for_timeout(1_500)
+                raise PageOperationError("已打开发起新聊天页面，等待适配联系人选择")
             raise PageOperationError("搜索不到目标好友")
         await result.click(force=True)
         await self._confirm_opened(name)
