@@ -42,6 +42,12 @@ class DouyinChat:
         raise PageOperationError("打开聊天失败")
 
     async def _open_target_once(self, name: str) -> None:
+        recent = await self._recent_conversation_result(name)
+        if recent is not None:
+            await recent.click(force=True)
+            await self._confirm_opened(name)
+            return
+
         search = await first_visible(self.page, SEARCH_INPUTS, self.timeout_ms)
         await search.click()
         await search.fill("")
@@ -52,14 +58,40 @@ class DouyinChat:
 
         result = await self._search_result(name)
         if result is None:
-            new_chat = self.page.locator(".LeftPanelHeaderheader > :last-child")
-            if await new_chat.count() and await new_chat.is_visible():
-                await new_chat.click()
-                await self.page.wait_for_timeout(1_500)
-                raise PageOperationError("已打开发起新聊天页面，等待适配联系人选择")
             raise PageOperationError("搜索不到目标好友")
         await result.click(force=True)
         await self._confirm_opened(name)
+
+    async def _recent_conversation_result(self, name: str) -> Locator | None:
+        """Scan the virtualized recent-conversation list for an exact name."""
+        wrapper = self.page.locator(".conversationConversationListwrapper").first
+        try:
+            if not await wrapper.count() or not await wrapper.is_visible():
+                return None
+        except Exception:
+            return None
+
+        rows = self.page.locator('[data-e2e="conversation-item"]')
+        for _ in range(30):
+            for index in range(await rows.count()):
+                row = rows.nth(index)
+                title = row.locator(".conversationConversationItemtitle").first
+                if await _text_equals(title, name):
+                    try:
+                        if await row.is_visible():
+                            return row
+                    except Exception:
+                        continue
+
+            state = await wrapper.evaluate(
+                "el => ({ top: el.scrollTop, height: el.clientHeight, total: el.scrollHeight })"
+            )
+            if state["top"] + state["height"] >= state["total"] - 1:
+                break
+            await wrapper.evaluate("el => { el.scrollTop += el.clientHeight; }")
+            await self.page.wait_for_timeout(300)
+
+        return None
 
     async def _search_result(self, name: str) -> Locator | None:
         # Search mode renders a separate SearchPanel. Its "发消息" action is the

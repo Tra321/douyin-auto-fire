@@ -16,6 +16,7 @@ async def test_search_failure_raises_without_page_text_or_real_name(monkeypatch)
     search.fill = AsyncMock()
     monkeypatch.setattr("app.douyin.first_visible", AsyncMock(return_value=search))
     chat = DouyinChat(page)
+    chat._recent_conversation_result = AsyncMock(return_value=None)
     chat._search_result = AsyncMock(return_value=None)
 
     with pytest.raises(PageOperationError, match="搜索不到目标好友") as exc_info:
@@ -26,6 +27,24 @@ async def test_search_failure_raises_without_page_text_or_real_name(monkeypatch)
     assert "张三" not in message
     search.fill.assert_awaited_once_with("")
     page.keyboard.type.assert_awaited_once_with("张三", delay=SEARCH_TYPING_DELAY_MS)
+
+
+@pytest.mark.asyncio
+async def test_open_target_prefers_recent_conversation(monkeypatch) -> None:
+    page = MagicMock()
+    row = MagicMock()
+    row.click = AsyncMock()
+    chat = DouyinChat(page)
+    chat._recent_conversation_result = AsyncMock(return_value=row)
+    chat._confirm_opened = AsyncMock()
+    first_visible = AsyncMock()
+    monkeypatch.setattr("app.douyin.first_visible", first_visible)
+
+    await chat._open_target_once("备注名")
+
+    row.click.assert_awaited_once_with(force=True)
+    chat._confirm_opened.assert_awaited_once_with("备注名")
+    first_visible.assert_not_awaited()
 
 
 def _locator_group(items: list[MagicMock]) -> MagicMock:
